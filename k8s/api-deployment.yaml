@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: 750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api:v1
+          image: 750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api:20516bb5e0a37cfa502ad775163be8f0447953d6-3
           imagePullPolicy: Always
           ports:
             - name: http
