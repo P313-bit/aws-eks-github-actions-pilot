@@ -252,3 +252,43 @@ https://github.com/P313-bit/aws-eks-github-actions-pilot
 
 Project status: CI pipeline and EKS deployment verified.
 Next milestone: Automated GitHub Actions deployment to EKS.
+
+## Self-Hosted GitHub Actions Runner
+
+A self-hosted GitHub Actions runner has been registered on the existing Ubuntu EC2 instance to support deployment to the EKS cluster.
+
+### Runner Configuration
+
+| Setting | Value |
+|---|---|
+| Runner name | `eks-deployment-runner` |
+| Runner group | `Default` |
+| Platform | Linux x64 |
+| Labels | `self-hosted`, `Linux`, `X64`, `eks-deploy` |
+| Linux service account | `github-runner` |
+| Installation directory | `/opt/actions-runner` |
+| Work directory | `_work` |
+| Runner version | `2.338.2` |
+| Service manager | systemd |
+| Current status | Idle |
+
+### Runner Security
+
+- The runner operates under a dedicated Linux account named `github-runner`.
+- The account is not a member of the `sudo` or `docker` groups.
+- The runner is installed as a systemd service and starts automatically.
+- An AWS CLI identity check under the runner account returned `NoCredentials`.
+- EC2 instance profile and metadata access verification is still pending.
+- A dedicated GitHub OIDC deployment IAM role and restricted EKS permissions are planned.
+- The EKS public API endpoint remains restricted to the configured EC2 public IP.
+
+### Deployment Status
+
+The self-hosted runner is connected to GitHub and ready to accept jobs. Automated EKS deployment is not yet configured.
+
+Next steps:
+1. Verify the EC2 instance identity and instance profile.
+2. Create a dedicated GitHub OIDC deployment IAM role.
+3. Configure an EKS access entry and namespace-scoped Kubernetes RBAC.
+4. Add the deployment job to the GitHub Actions workflow.
+5. Verify automated image deployment and Kubernetes rollout.
