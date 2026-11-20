@@ -126,20 +126,35 @@ The Deployment includes:
 
 Both replicas were verified Running and Ready on separate worker nodes.
 
-## 7. GitHub Actions CI Pipeline
+## 7. GitHub Actions CI/CD Pipeline
 
 Workflow file:
 
-.github/workflows/build-and-push.yml
+`.github/workflows/build-and-push.yml`
 
-Current pipeline steps:
+The workflow contains two separate jobs:
+
+**Job 1 — Build and Push Docker Image**
+
+Runs on a GitHub-hosted Ubuntu runner.
 
 1. Checkout source code.
 2. Authenticate to AWS using GitHub OIDC.
 3. Log in to Amazon ECR.
 4. Configure Docker Buildx.
 5. Build the Docker image.
-6. Push the image to Amazon ECR.
+6. Push the versioned image to Amazon ECR.
+
+**Job 2 — Deploy Application to Amazon EKS**
+
+Runs on the EC2 self-hosted GitHub Actions runner and depends on the successful completion of the build job.
+
+1. Authenticate using the dedicated EKS deployment OIDC role.
+2. Verify the AWS identity.
+3. Configure the EKS kubeconfig.
+4. Update the Kubernetes Deployment image.
+5. Wait for the Kubernetes rolling update to complete.
+6. Display Deployment and Pod status.
 
 Image tags use the Git commit SHA and GitHub run attempt.
 
@@ -147,32 +162,40 @@ No permanent AWS access keys are stored in GitHub Actions.
 
 ### IAM roles
 
-Existing CI role:
+| IAM role | Purpose |
+|---|---|
+| `GitHubActionsECRPushRole` | Authenticate with Amazon ECR and push application images |
+| `GitHubActionsEKSDeployRole` | Describe the EKS cluster and authenticate for Kubernetes deployment |
 
-GitHubActionsECRPushRole
+Both roles use GitHub OIDC authentication and are restricted to the trusted repository and `main` branch.
 
-Purpose:
-- Authenticate with Amazon ECR.
-- Push images to the eks-pilot-api repository.
-
-This role is separate from the planned EKS deployment role.
+The EKS deployment role is registered through an EKS access entry and uses namespace-scoped Kubernetes RBAC rather than cluster-admin permissions.
 
 ## 8. Current Deployment Verification
 
-The following checks have passed:
+The automated GitHub Actions deployment to Amazon EKS has been successfully tested.
 
-- GitHub Actions successfully built and pushed a Docker image.
-- The CI image is available in Amazon ECR.
-- Kubernetes Deployment successfully rolled out the CI image.
+Verified results:
+
+- GitHub Actions successfully built and pushed the Docker image to Amazon ECR.
+- GitHub OIDC authentication successfully assumed the EKS deployment IAM role.
+- The self-hosted runner successfully configured access to the EKS cluster.
+- Kubernetes Deployment image was updated automatically.
+- Kubernetes rolling update completed successfully.
 - Both application replicas are Running and Ready.
-- Both replicas are scheduled on separate worker nodes.
-- Application root endpoint returned the expected JSON response.
-- Health endpoint returned healthy status.
-- Kubernetes server-side manifest validation passed.
+- Both replicas are scheduled across separate worker nodes.
+- Deployment rollout verification succeeded.
+- Application health endpoint returned `{"status":"healthy"}`.
 
-Current verified CI image:
+Latest verified image:
 
-20516bb5e0a37cfa502ad775163be8f0447953d6-3
+`8174cf6207171d205e9ccc2fefcd07f6896d0ce9-1`
+
+ECR image:
+
+`750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api`
+
+The application health check was performed through the Kubernetes Service from a temporary test Pod. The temporary Pod was removed after verification.
 
 ## 9. Repository Structure
 
@@ -189,7 +212,8 @@ aws-eks-github-actions-pilot/
 │   └── server.js
 ├── k8s/
 │   ├── api-deployment.yaml
-│   └── api-service.yaml
+│   ├── api-service.yaml
+│   └── rbac-deployer.yaml
 ├── .gitignore
 └── README.md
 ```
@@ -206,28 +230,29 @@ and are not part of the application repository.
 | Docker image build | Completed |
 | Amazon ECR repository | Completed |
 | GitHub Actions CI workflow | Completed |
-| AWS OIDC authentication | Completed |
+| GitHub OIDC authentication | Completed |
 | EKS cluster provisioning | Completed |
 | Kubernetes Deployment | Completed |
 | Kubernetes Service | Completed |
 | Application endpoint testing | Completed |
-| CI image deployment to EKS | Completed (manual update) |
-| README documentation | Completed |
-| Automated GitHub Actions to EKS deployment | Planned |
+| Self-hosted GitHub Actions runner | Completed |
+| Dedicated EKS deployment IAM role | Completed |
+| EKS access entry | Completed |
+| Namespace-scoped Kubernetes RBAC | Completed |
+| Automated GitHub Actions EKS deployment | Completed and verified |
+| Kubernetes rolling update verification | Completed |
+| Application health check | Passed |
 | Argo CD GitOps integration | Planned |
 | Monitoring and observability | Planned |
-| Final architecture documentation | Planned |
+| Final architecture documentation | In progress |
 
 ## 11. Next Implementation Steps
 
-1. Create a dedicated IAM role for EKS deployment.
-2. Configure GitHub OIDC trust for the deployment role.
-3. Configure restricted EKS access for that role.
-4. Update GitHub Actions to deploy the image automatically.
-5. Test the complete CI/CD workflow.
-6. Introduce Argo CD for GitOps-based deployment.
-7. Add monitoring and observability.
-8. Document final architecture and troubleshooting.
+1. Introduce Argo CD for GitOps-based deployment.
+2. Evaluate production-inspired Kubernetes resilience and security improvements.
+3. Add monitoring and observability.
+4. Improve deployment reporting and troubleshooting documentation.
+5. Document the final architecture and operational procedures.
 
 ## 12. Cost and Cleanup Considerations
 
@@ -250,8 +275,8 @@ https://github.com/P313-bit/aws-eks-github-actions-pilot
 
 ---
 
-Project status: CI pipeline and EKS deployment verified.
-Next milestone: Automated GitHub Actions deployment to EKS.
+Project status: GitHub Actions CI/CD pipeline and automated EKS deployment verified.
+Next milestone: Argo CD GitOps integration and monitoring.
 
 ## Self-Hosted GitHub Actions Runner
 
@@ -270,28 +295,21 @@ A self-hosted GitHub Actions runner has been registered on the existing Ubuntu E
 | Work directory | `_work` |
 | Runner version | `2.338.2` |
 | Service manager | systemd |
-| Current status | Idle |
+| Current status | Connected and successfully executed deployment jobs |
 
 ### Runner Security
 
 - The runner operates under a dedicated Linux account named `github-runner`.
 - The account is not a member of the `sudo` or `docker` groups.
 - The runner is installed as a systemd service and starts automatically.
-- An AWS CLI identity check under the runner account returned `NoCredentials`.
-- EC2 instance profile and metadata access verification is still pending.
-- A dedicated GitHub OIDC deployment IAM role and restricted EKS permissions are planned.
+- The runner account has no EC2 instance profile credentials.
+- AWS credentials are provided to deployment jobs through GitHub OIDC.
+- A dedicated GitHub OIDC deployment IAM role and restricted EKS permissions are configured and verified.
 - The EKS public API endpoint remains restricted to the configured EC2 public IP.
 
 ### Deployment Status
 
-The self-hosted runner is connected to GitHub and ready to accept jobs. Automated EKS deployment is not yet configured.
-
-Next steps:
-1. Verify the EC2 instance identity and instance profile.
-2. Create a dedicated GitHub OIDC deployment IAM role.
-3. Configure an EKS access entry and namespace-scoped Kubernetes RBAC.
-4. Add the deployment job to the GitHub Actions workflow.
-5. Verify automated image deployment and Kubernetes rollout.
+The self-hosted runner is connected to GitHub and has successfully executed the EKS deployment job. It uses GitHub OIDC to obtain temporary AWS credentials. The deployment workflow updates the application image and verifies the Kubernetes rollout.
 
 ### Network Connectivity Verification
 
@@ -305,7 +323,7 @@ Next steps:
 
 The EC2 runner's outbound public IP matches the EKS API allowlist. The EKS public endpoint remains restricted rather than being opened to all internet addresses.
 
-The EC2 instance metadata endpoint did not return IAM instance profile information. The runner account also returned `NoCredentials` when checking its AWS CLI identity. The dedicated GitHub OIDC deployment role has been created and registered with the EKS cluster.
+The EC2 instance metadata endpoint did not return IAM instance profile information. The runner account also returned `NoCredentials` when checking its AWS CLI identity. The dedicated GitHub OIDC deployment role has been created, registered with the EKS cluster, and successfully used by the automated deployment workflow.
 
 ### GitHub OIDC EKS Deployment Access
 
