@@ -305,4 +305,43 @@ Next steps:
 
 The EC2 runner's outbound public IP matches the EKS API allowlist. The EKS public endpoint remains restricted rather than being opened to all internet addresses.
 
-The EC2 instance metadata endpoint did not return IAM instance profile information. The runner account also returned `NoCredentials` when checking its AWS CLI identity. A dedicated GitHub OIDC deployment role is planned.
+The EC2 instance metadata endpoint did not return IAM instance profile information. The runner account also returned `NoCredentials` when checking its AWS CLI identity. The dedicated GitHub OIDC deployment role has been created and registered with the EKS cluster.
+
+### GitHub OIDC EKS Deployment Access
+
+A dedicated IAM role was created for GitHub Actions EKS deployments.
+
+| Component | Configuration |
+|---|---|
+| IAM role | `GitHubActionsEKSDeployRole` |
+| IAM policy | `GitHubActionsEKSDeployPolicy` |
+| AWS permission | `eks:DescribeCluster` |
+| EKS cluster | `devops-pilot-eks` |
+| EKS region | `ap-south-1` |
+| Authentication | GitHub Actions OIDC |
+| Trusted repository | `P313-bit/aws-eks-github-actions-pilot` |
+| Trusted branch | `main` |
+
+The role is registered with the EKS cluster through an EKS access entry and belongs to the Kubernetes group `github-actions-deployer`.
+
+### Namespace-Scoped Kubernetes RBAC
+
+The manifest `k8s/rbac-deployer.yaml` creates a Role and RoleBinding in the `dev` namespace.
+
+| Resource | Permissions |
+|---|---|
+| Deployments | get, list, watch, patch |
+| ReplicaSets | get, list, watch |
+| Pods | get, list, watch |
+| Services | get, list, watch |
+| Secrets | No access |
+
+Authorization checks using Kubernetes impersonation returned:
+
+| Check | Result |
+|---|---|
+| Patch deployments | Allowed |
+| Read pods | Allowed |
+| Read secrets | Denied |
+
+The deployment role does not receive cluster-admin access or namespace-wide administrative permissions.

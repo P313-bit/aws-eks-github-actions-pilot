@@ -12,3 +12,7 @@ npm-debug.log*
 # Local IAM policy documents
 github-ecr-policy.json
 github-trust-policy.json
+
+# Local EKS deployment IAM policy documents
+github-eks-deploy-policy.json
+github-eks-trust-policy.json
