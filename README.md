@@ -292,3 +292,17 @@ Next steps:
 3. Configure an EKS access entry and namespace-scoped Kubernetes RBAC.
 4. Add the deployment job to the GitHub Actions workflow.
 5. Verify automated image deployment and Kubernetes rollout.
+
+### Network Connectivity Verification
+
+| Check | Verified value |
+|---|---|
+| Self-hosted runner EC2 region | `us-east-2` |
+| EKS cluster region | `ap-south-1` |
+| EC2 outbound public IP | `18.118.253.128` |
+| EKS public API allowed CIDR | `18.118.253.128/32` |
+| Network allowlist match | Confirmed |
+
+The EC2 runner's outbound public IP matches the EKS API allowlist. The EKS public endpoint remains restricted rather than being opened to all internet addresses.
+
+The EC2 instance metadata endpoint did not return IAM instance profile information. The runner account also returned `NoCredentials` when checking its AWS CLI identity. A dedicated GitHub OIDC deployment role is planned.
