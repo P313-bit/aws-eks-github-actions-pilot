@@ -8,3 +8,7 @@ npm-debug.log*
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Local IAM policy documents
+github-ecr-policy.json
+github-trust-policy.json
