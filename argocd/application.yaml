@@ -1,0 +1,16 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: eks-pilot-api-dev
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/P313-bit/aws-eks-github-actions-pilot.git
+    targetRevision: main
+    path: gitops/dev/eks-pilot-api
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
