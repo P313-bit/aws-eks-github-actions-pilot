@@ -46,45 +46,63 @@ jobs:
           push: true
           tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}-${{ github.run_attempt }}
 
-  deploy-to-eks:
-    name: Deploy Application to Amazon EKS
-    runs-on: [self-hosted, linux, x64, eks-deploy]
+  update-gitops-manifest:
+    name: Update GitOps Image Tag
+    runs-on: ubuntu-latest
     needs: build-and-push
-    timeout-minutes: 10
 
     permissions:
-      contents: read
-      id-token: write
+      contents: write
 
     steps:
-      - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          role-to-assume: arn:aws:iam::750281913869:role/GitHubActionsEKSDeployRole
-          aws-region: ${{ env.AWS_REGION }}
+          token: ${{ github.token }}
+          fetch-depth: 0
 
-      - name: Verify AWS identity
-        run: aws sts get-caller-identity
-
-      - name: Configure EKS kubeconfig
+      - name: Update Kustomize image tag
+        env:
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
         run: |
-          aws eks update-kubeconfig \
-            --region "$AWS_REGION" \
-            --name devops-pilot-eks
+          python3 <<'PYTHON'
+          import os
+          from pathlib import Path
 
-      - name: Deploy new image to Kubernetes
-        run: |
-          kubectl set image deployment/eks-pilot-api \
-            api=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT} \
-            --namespace dev
+          path = Path("gitops/dev/eks-pilot-api/kustomization.yaml")
+          content = path.read_text()
 
-      - name: Verify Kubernetes rollout
-        run: |
-          kubectl rollout status deployment/eks-pilot-api \
-            --namespace dev \
-            --timeout=180s
+          lines = content.splitlines()
+          matches = [i for i, line in enumerate(lines)
+                     if line.strip().startswith("newTag:")]
 
-      - name: Display deployment status
+          if len(matches) != 1:
+              raise SystemExit(
+                  f"Expected exactly one newTag entry, found {len(matches)}"
+              )
+
+          index = matches[0]
+          lines[index] = "    newTag: " + os.environ["IMAGE_TAG"]
+          path.write_text("\n".join(lines) + "\n")
+
+          print(f"Updated image tag to: {os.environ['IMAGE_TAG']}")
+          PYTHON
+
+      - name: Review GitOps manifest change
         run: |
-          kubectl get deployment eks-pilot-api -n dev
-          kubectl get pods -n dev -o wide
+          git diff --check
+          git diff -- gitops/dev/eks-pilot-api/kustomization.yaml
+
+      - name: Commit and push GitOps update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- gitops/dev/eks-pilot-api/kustomization.yaml; then
+            echo "No GitOps manifest change detected."
+            exit 0
+          fi
+
+          git add gitops/dev/eks-pilot-api/kustomization.yaml
+          git commit -m "chore(gitops): update API image to ${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}"
+          git push origin HEAD:main
