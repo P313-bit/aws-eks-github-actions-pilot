@@ -1,37 +1,43 @@
 # AWS EKS GitHub Actions CI/CD Pilot
 
-An end-to-end DevOps learning project demonstrating containerization,
-AWS infrastructure, Kubernetes deployment, and CI automation.
+An end-to-end DevOps learning project demonstrating containerization, AWS infrastructure, Kubernetes deployment, GitHub Actions CI, and Argo CD GitOps delivery.
 
 ## 1. Project Overview
 
 This project deploys a Node.js REST API to Amazon EKS.
 
-The current implementation includes:
+Current implementation:
+- Node.js and Express REST API
 - Docker containerization
 - Amazon ECR image repository
 - GitHub Actions CI pipeline
 - AWS IAM OIDC authentication
+- GitOps manifest updates using GitHub Actions
+- Argo CD application reconciliation
 - Amazon EKS managed node group
 - Kubernetes Deployment and ClusterIP Service
 - Application health and readiness probes
+- Two application replicas across separate worker nodes
+
+This is a production-inspired learning pilot, not a production-ready reference architecture.
 
 ## 2. Architecture
 
-### Current implementation
+### Current CI/CD and GitOps architecture
 
 ```text
 Developer
    |
    v
-GitHub Repository
+GitHub Repository (main)
    |
    v
-GitHub Actions
+GitHub Actions - Build and Push
+(GitHub-hosted Ubuntu runner)
    |
-   | AWS OIDC authentication
+   | GitHub OIDC
    v
-AWS IAM Role
+AWS IAM - ECR Push Role
    |
    v
 Docker Build
@@ -39,7 +45,19 @@ Docker Build
    v
 Amazon ECR
    |
-   | Manual kubectl image update (current stage)
+   v
+GitHub Actions - Update GitOps Manifest
+(GitHub-hosted Ubuntu runner)
+   |
+   | Commit updated image tag
+   v
+GitOps Repository
+(Kustomize manifest)
+   |
+   v
+Argo CD
+(Manual synchronization)
+   |
    v
 Amazon EKS
    |
@@ -53,10 +71,20 @@ Node.js API Pods (2 replicas)
 Kubernetes ClusterIP Service
 ```
 
-### Architecture transition
+### Deployment workflow
 
-GitHub Actions will automatically deploy the new image to EKS.
-Argo CD is installed and has successfully adopted and synchronized the existing Kubernetes Deployment and Service. GitHub Actions migration to GitOps-based image updates is still pending.
+1. A source-code change is pushed to the `main` branch.
+2. GitHub Actions builds the Docker image.
+3. GitHub Actions authenticates to AWS using OIDC.
+4. The image is pushed to Amazon ECR with an immutable version tag.
+5. A separate GitHub Actions job updates the Kustomize image tag.
+6. The updated manifest is committed to the GitHub repository.
+7. Argo CD detects the repository revision.
+8. An operator manually synchronizes the Argo CD application.
+9. Argo CD applies the desired state to the EKS cluster.
+10. Kubernetes performs the Deployment rollout.
+
+**Important:** Argo CD automated sync, self-healing, and pruning are not enabled. A manual sync is required after a new GitOps manifest commit.
 
 ## 3. Technology Stack
 
@@ -68,8 +96,10 @@ Argo CD is installed and has successfully adopted and synchronized the existing 
 | Orchestration | Kubernetes |
 | Managed Kubernetes | Amazon EKS |
 | CI/CD | GitHub Actions |
+| GitOps | Argo CD |
+| Manifest Management | Kustomize |
 | Authentication | AWS IAM OIDC |
-| Infrastructure CLI | AWS CLI, eksctl |
+| Infrastructure CLI | AWS CLI, kubectl, eksctl |
 | Application | Node.js, Express |
 | Operating System | Ubuntu 24.04 |
 
@@ -77,9 +107,9 @@ Argo CD is installed and has successfully adopted and synchronized the existing 
 
 | Resource | Configuration |
 |---|---|
-| Region | ap-south-1 (Mumbai) |
+| AWS Region | ap-south-1 (Mumbai) |
 | EKS Cluster | devops-pilot-eks |
-| Kubernetes Version | 1.37 |
+| Kubernetes Version | 1.37.1 |
 | Namespace | dev |
 | Worker Nodes | 2 |
 | Instance Type | t3.medium |
@@ -87,35 +117,34 @@ Argo CD is installed and has successfully adopted and synchronized the existing 
 | ECR Repository | eks-pilot-api |
 | ECR Image Scanning | Scan on push |
 | ECR Tag Mutability | Immutable |
+| Argo CD Version | v3.6.2 |
 
-The cluster uses a dedicated VPC, public and private subnets,
-and a NAT Gateway. Worker nodes are in private subnets.
+The cluster uses a dedicated VPC, public and private subnets, and a NAT Gateway. Worker nodes are deployed in private subnets.
 
 ## 5. Application Details
 
-The project contains a Node.js REST API.
+The project contains a Node.js REST API built with Express.
 
 | Endpoint | Purpose |
 |---|---|
-| / | Application information |
-| /health | Health check |
-| /ready | Readiness check |
+| `/` | Application information |
+| `/health` | Health check |
+| `/ready` | Readiness check |
 
-Application port: 3000
+Application port: `3000`
+
+The Docker image uses a non-root container user and installs production dependencies.
 
 ## 6. Kubernetes Configuration
 
-Namespace: dev
-
-Deployment: eks-pilot-api
-
-Service: eks-pilot-api
-
-Service type: ClusterIP
-
-Replicas: 2
-
-Container port: 3000
+| Setting | Value |
+|---|---|
+| Namespace | dev |
+| Deployment | eks-pilot-api |
+| Service | eks-pilot-api |
+| Service type | ClusterIP |
+| Replicas | 2 |
+| Container port | 3000 |
 
 The Deployment includes:
 - Startup probe
@@ -124,7 +153,7 @@ The Deployment includes:
 - CPU and memory requests
 - CPU and memory limits
 
-Both replicas were verified Running and Ready on separate worker nodes.
+The latest rollout was verified with both replicas Running and Ready on separate worker nodes.
 
 ## 7. GitHub Actions CI/CD Pipeline
 
@@ -132,11 +161,9 @@ Workflow file:
 
 `.github/workflows/build-and-push.yml`
 
-The workflow contains two separate jobs:
+The workflow uses two GitHub-hosted Ubuntu jobs.
 
-**Job 1 — Build and Push Docker Image**
-
-Runs on a GitHub-hosted Ubuntu runner.
+### Job 1 — Build and Push Docker Image
 
 1. Checkout source code.
 2. Authenticate to AWS using GitHub OIDC.
@@ -145,16 +172,12 @@ Runs on a GitHub-hosted Ubuntu runner.
 5. Build the Docker image.
 6. Push the versioned image to Amazon ECR.
 
-**Job 2 — Deploy Application to Amazon EKS**
+### Job 2 — Update GitOps Image Tag
 
-Runs on the EC2 self-hosted GitHub Actions runner and depends on the successful completion of the build job.
-
-1. Authenticate using the dedicated EKS deployment OIDC role.
-2. Verify the AWS identity.
-3. Configure the EKS kubeconfig.
-4. Update the Kubernetes Deployment image.
-5. Wait for the Kubernetes rolling update to complete.
-6. Display Deployment and Pod status.
+1. Runs after the image build and push job succeeds.
+2. Checks out the repository using the GitHub token.
+3. Updates the image tag in `gitops/dev/eks-pilot-api/kustomization.yaml`.
+4. Commits and pushes the updated GitOps manifest to `main`.
 
 Image tags use the Git commit SHA and GitHub run attempt.
 
@@ -165,75 +188,65 @@ No permanent AWS access keys are stored in GitHub Actions.
 | IAM role | Purpose |
 |---|---|
 | `GitHubActionsECRPushRole` | Authenticate with Amazon ECR and push application images |
-| `GitHubActionsEKSDeployRole` | Describe the EKS cluster and authenticate for Kubernetes deployment |
+| `GitHubActionsEKSDeployRole` | Legacy direct EKS deployment access; retained pending review and cleanup |
 
-Both roles use GitHub OIDC authentication and are restricted to the trusted repository and `main` branch.
+The current GitHub Actions workflow uses the ECR push role. The GitOps manifest update job uses GitHub repository permissions and does not directly deploy to EKS.
 
-The EKS deployment role is registered through an EKS access entry and uses namespace-scoped Kubernetes RBAC rather than cluster-admin permissions.
+The legacy EKS deployment role and its namespace-scoped RBAC are not used by the current GitOps deployment workflow.
 
-## 8. Current Deployment Verification
-
-The automated GitHub Actions deployment to Amazon EKS has been successfully tested.
-
-Verified results:
-
-- GitHub Actions successfully built and pushed the Docker image to Amazon ECR.
-- GitHub OIDC authentication successfully assumed the EKS deployment IAM role.
-- The self-hosted runner successfully configured access to the EKS cluster.
-- Kubernetes Deployment image was updated automatically.
-- Kubernetes rolling update completed successfully.
-- Both application replicas are Running and Ready.
-- Both replicas are scheduled across separate worker nodes.
-- Deployment rollout verification succeeded.
-- Application health endpoint returned `{"status":"healthy"}`.
-
-Latest verified image:
-
-`8174cf6207171d205e9ccc2fefcd07f6896d0ce9-1`
-
-ECR image:
-
-`750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api`
-
-The application health check was performed through the Kubernetes Service from a temporary test Pod. The temporary Pod was removed after verification.
-
-
-## Argo CD GitOps — Verified Milestone
+## 8. GitOps Configuration
 
 Argo CD v3.6.2 is installed in the `argocd` namespace.
 
-Application: `eks-pilot-api-dev`
+| Setting | Value |
+|---|---|
+| Application | eks-pilot-api-dev |
+| Source repository | P313-bit/aws-eks-github-actions-pilot |
+| Branch | main |
+| Manifest path | gitops/dev/eks-pilot-api |
+| Destination | Kubernetes in-cluster API |
+| Destination namespace | dev |
+| Manifest format | Kustomize |
+| Sync policy | Manual |
 
-Configuration:
-- Source repository: `P313-bit/aws-eks-github-actions-pilot`
-- Branch: `main`
-- Manifest path: `gitops/dev/eks-pilot-api`
-- Destination namespace: `dev`
-- Manifest type: Kustomize
-- Sync policy: Manual
+Important repository files:
 
-Repository files:
 - `argocd/application.yaml`
 - `gitops/dev/eks-pilot-api/api-deployment.yaml`
 - `gitops/dev/eks-pilot-api/api-service.yaml`
 - `gitops/dev/eks-pilot-api/kustomization.yaml`
 
-Verification results:
-- Argo CD sync operation: Succeeded
-- Application sync status: Synced
-- Application health: Healthy
-- Service: Synced and Healthy
-- Deployment: Synced and Healthy
-- Application replicas: 2/2 Ready
-- Both Pods: Running with zero restarts
+The Kustomize image transformer updates the Deployment image using the tag committed by GitHub Actions.
 
-The initial sync adopted the existing Kubernetes resources by adding
-Argo CD tracking annotations. No application rollout was required.
+### Latest verified GitOps deployment
 
-Important: GitHub Actions still uses direct `kubectl set image`
-deployment. The next milestone is to update the Kustomize image tag
-through GitHub Actions and let Argo CD reconcile the deployment.
-Automated sync, self-healing, and pruning are not enabled.
+| Check | Result |
+|---|---|
+| GitHub Actions build and ECR push | Successful |
+| GitOps manifest update | Successful |
+| GitOps commit | `f55b4af` |
+| Argo CD sync operation | Succeeded |
+| Argo CD sync status | Synced |
+| Argo CD health | Healthy |
+| Deployment rollout | Successful |
+| Ready replicas | 2/2 |
+| Pod status | Running |
+| Pod restarts | 0 |
+| Worker-node placement | Two separate nodes |
+
+Latest deployed image tag:
+
+`326e94d27f8a0d3b1fb623077b76bc3a1fe65cff-1`
+
+ECR image:
+
+`750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api`
+
+The latest deployment was synchronized from Git commit `f55b4af6b9be1409995fee3cea0645bace47eafa`.
+
+The Argo CD application is configured for manual synchronization. The initial Argo CD adoption added tracking annotations to the existing Service and Deployment. The subsequent GitOps sync deployed the new image version and the rollout was verified successfully.
+
+Automated sync, self-healing, and pruning remain disabled.
 
 ## 9. Repository Structure
 
@@ -248,6 +261,14 @@ aws-eks-github-actions-pilot/
 │   ├── package.json
 │   ├── package-lock.json
 │   └── server.js
+├── argocd/
+│   └── application.yaml
+├── gitops/
+│   └── dev/
+│       └── eks-pilot-api/
+│           ├── api-deployment.yaml
+│           ├── api-service.yaml
+│           └── kustomization.yaml
 ├── k8s/
 │   ├── api-deployment.yaml
 │   ├── api-service.yaml
@@ -256,8 +277,7 @@ aws-eks-github-actions-pilot/
 └── README.md
 ```
 
-IAM policy files used for AWS configuration are kept locally
-and are not part of the application repository.
+IAM policy files used for AWS configuration are maintained separately and are not included in the application repository.
 
 ## 10. Project Progress
 
@@ -270,43 +290,41 @@ and are not part of the application repository.
 | GitHub Actions CI workflow | Completed |
 | GitHub OIDC authentication | Completed |
 | EKS cluster provisioning | Completed |
-| Kubernetes Deployment | Completed |
-| Kubernetes Service | Completed |
-| Application endpoint testing | Completed |
-| Self-hosted GitHub Actions runner | Completed |
-| Dedicated EKS deployment IAM role | Completed |
-| EKS access entry | Completed |
-| Namespace-scoped Kubernetes RBAC | Completed |
-| Automated GitHub Actions EKS deployment | Completed and verified |
-| Kubernetes rolling update verification | Completed |
-| Application health check | Passed |
+| Kubernetes Deployment and Service | Completed |
+| Application health endpoint testing | Previously verified |
+| Self-hosted GitHub Actions runner setup | Completed |
+| Dedicated EKS deployment IAM role and RBAC | Completed; legacy |
 | Argo CD v3.6.2 installation | Completed |
 | Argo CD Application and Kustomize manifests | Completed |
-| Argo CD manual sync and resource adoption | Completed and verified |
-| GitHub Actions GitOps image update | Pending |
+| GitHub Actions GitOps image update | Completed and verified |
+| Argo CD manual synchronization | Completed and verified |
+| Latest EKS rollout verification | Completed |
+| Automated Argo CD sync | Not enabled |
 | Monitoring and observability | Planned |
-| Final architecture documentation | In progress |
+| Further security and resilience improvements | Planned |
 
 ## 11. Next Implementation Steps
 
-1. Migrate GitHub Actions from direct kubectl image updates to GitOps manifest updates.
-2. Evaluate production-inspired Kubernetes resilience and security improvements.
+1. Add application-level validation after each GitOps deployment.
+2. Evaluate Argo CD automated sync and self-healing after reviewing the manual workflow.
 3. Add monitoring and observability.
-4. Improve deployment reporting and troubleshooting documentation.
-5. Document the final architecture and operational procedures.
+4. Improve Kubernetes security, resource management, and resilience.
+5. Review and remove legacy EKS deployment IAM permissions and RBAC when no longer required.
+6. Document architecture, troubleshooting, and cleanup procedures.
 
 ## 12. Cost and Cleanup Considerations
 
 This learning environment uses billable AWS resources, including:
 
-- Amazon EKS cluster
+- Amazon EKS cluster control plane
 - EC2 worker nodes
 - NAT Gateway and data processing
 - EBS volumes
 - Amazon ECR storage and data transfer
 
-Review AWS costs regularly. When the project is not in use,
-stop or delete resources safely according to the cleanup plan.
+Review AWS costs regularly. When the project is not in use, clean up resources according to the dependency-aware cleanup plan.
+
+Do not delete the EKS cluster or networking resources before checking dependent resources and persistent data.
 
 ## 13. Repository
 
@@ -316,12 +334,13 @@ https://github.com/P313-bit/aws-eks-github-actions-pilot
 
 ---
 
-Project status: GitHub Actions CI/CD pipeline and automated EKS deployment verified.
-Next milestone: GitHub Actions GitOps image updates and Argo CD deployment validation.
+**Project status:** GitHub Actions image build, ECR push, GitOps manifest update, Argo CD manual sync, and EKS rollout successfully verified.
 
-## Self-Hosted GitHub Actions Runner
+## 14. Self-Hosted GitHub Actions Runner
 
-A self-hosted GitHub Actions runner has been registered on the existing Ubuntu EC2 instance to support deployment to the EKS cluster.
+A self-hosted GitHub Actions runner was configured on an existing Ubuntu EC2 instance to support the earlier direct EKS deployment workflow and cluster administration.
+
+It is retained as infrastructure for the pilot, but the current image build and GitOps manifest update jobs use GitHub-hosted runners.
 
 ### Runner Configuration
 
@@ -336,21 +355,15 @@ A self-hosted GitHub Actions runner has been registered on the existing Ubuntu E
 | Work directory | `_work` |
 | Runner version | `2.338.2` |
 | Service manager | systemd |
-| Current status | Connected and successfully executed deployment jobs |
 
 ### Runner Security
 
 - The runner operates under a dedicated Linux account named `github-runner`.
 - The account is not a member of the `sudo` or `docker` groups.
-- The runner is installed as a systemd service and starts automatically.
+- The runner is installed as a systemd service.
 - The runner account has no EC2 instance profile credentials.
-- AWS credentials are provided to deployment jobs through GitHub OIDC.
-- A dedicated GitHub OIDC deployment IAM role and restricted EKS permissions are configured and verified.
-- The EKS public API endpoint remains restricted to the configured EC2 public IP.
-
-### Deployment Status
-
-The self-hosted runner is connected to GitHub and has successfully executed the EKS deployment job. It uses GitHub OIDC to obtain temporary AWS credentials. The deployment workflow updates the application image and verifies the Kubernetes rollout.
+- The earlier deployment workflow used GitHub OIDC for temporary AWS credentials.
+- The EKS public API endpoint is restricted to the configured EC2 public IP.
 
 ### Network Connectivity Verification
 
@@ -362,13 +375,11 @@ The self-hosted runner is connected to GitHub and has successfully executed the 
 | EKS public API allowed CIDR | `18.118.253.128/32` |
 | Network allowlist match | Confirmed |
 
-The EC2 runner's outbound public IP matches the EKS API allowlist. The EKS public endpoint remains restricted rather than being opened to all internet addresses.
+The EC2 runner's outbound public IP matches the EKS API allowlist. The EKS public endpoint is not open to all internet addresses.
 
-The EC2 instance metadata endpoint did not return IAM instance profile information. The runner account also returned `NoCredentials` when checking its AWS CLI identity. The dedicated GitHub OIDC deployment role has been created, registered with the EKS cluster, and successfully used by the automated deployment workflow.
+### Legacy GitHub OIDC EKS Deployment Access
 
-### GitHub OIDC EKS Deployment Access
-
-A dedicated IAM role was created for GitHub Actions EKS deployments.
+The following configuration was created for the earlier direct deployment workflow.
 
 | Component | Configuration |
 |---|---|
@@ -381,9 +392,11 @@ A dedicated IAM role was created for GitHub Actions EKS deployments.
 | Trusted repository | `P313-bit/aws-eks-github-actions-pilot` |
 | Trusted branch | `main` |
 
-The role is registered with the EKS cluster through an EKS access entry and belongs to the Kubernetes group `github-actions-deployer`.
+The role was registered with the EKS cluster through an EKS access entry and assigned to the Kubernetes group `github-actions-deployer`.
 
-### Namespace-Scoped Kubernetes RBAC
+This role is retained for review and cleanup. It is not used by the current GitOps deployment workflow.
+
+### Legacy Namespace-Scoped Kubernetes RBAC
 
 The manifest `k8s/rbac-deployer.yaml` creates a Role and RoleBinding in the `dev` namespace.
 
@@ -395,7 +408,7 @@ The manifest `k8s/rbac-deployer.yaml` creates a Role and RoleBinding in the `dev
 | Services | get, list, watch |
 | Secrets | No access |
 
-Authorization checks using Kubernetes impersonation returned:
+Previous authorization checks using Kubernetes impersonation returned:
 
 | Check | Result |
 |---|---|
@@ -403,4 +416,4 @@ Authorization checks using Kubernetes impersonation returned:
 | Read pods | Allowed |
 | Read secrets | Denied |
 
-The deployment role does not receive cluster-admin access or namespace-wide administrative permissions.
+The legacy deployment role does not receive cluster-admin access or namespace-wide administrative permissions.
