@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - api-deployment.yaml
+  - api-service.yaml
+
+images:
+  - name: 750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api
+    newTag: 8174cf6207171d205e9ccc2fefcd07f6896d0ce9-1

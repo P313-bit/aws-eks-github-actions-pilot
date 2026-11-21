@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eks-pilot-api
+  namespace: dev
+  labels:
+    app: eks-pilot-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eks-pilot-api
+  template:
+    metadata:
+      labels:
+        app: eks-pilot-api
+    spec:
+      containers:
+        - name: api
+          image: 750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api:20516bb5e0a37cfa502ad775163be8f0447953d6-3
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
