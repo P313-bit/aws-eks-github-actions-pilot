@@ -53,10 +53,10 @@ Node.js API Pods (2 replicas)
 Kubernetes ClusterIP Service
 ```
 
-### Planned architecture
+### Architecture transition
 
 GitHub Actions will automatically deploy the new image to EKS.
-Argo CD GitOps will be introduced as a later milestone.
+Argo CD is installed and has successfully adopted and synchronized the existing Kubernetes Deployment and Service. GitHub Actions migration to GitOps-based image updates is still pending.
 
 ## 3. Technology Stack
 
@@ -197,6 +197,44 @@ ECR image:
 
 The application health check was performed through the Kubernetes Service from a temporary test Pod. The temporary Pod was removed after verification.
 
+
+## Argo CD GitOps — Verified Milestone
+
+Argo CD v3.6.2 is installed in the `argocd` namespace.
+
+Application: `eks-pilot-api-dev`
+
+Configuration:
+- Source repository: `P313-bit/aws-eks-github-actions-pilot`
+- Branch: `main`
+- Manifest path: `gitops/dev/eks-pilot-api`
+- Destination namespace: `dev`
+- Manifest type: Kustomize
+- Sync policy: Manual
+
+Repository files:
+- `argocd/application.yaml`
+- `gitops/dev/eks-pilot-api/api-deployment.yaml`
+- `gitops/dev/eks-pilot-api/api-service.yaml`
+- `gitops/dev/eks-pilot-api/kustomization.yaml`
+
+Verification results:
+- Argo CD sync operation: Succeeded
+- Application sync status: Synced
+- Application health: Healthy
+- Service: Synced and Healthy
+- Deployment: Synced and Healthy
+- Application replicas: 2/2 Ready
+- Both Pods: Running with zero restarts
+
+The initial sync adopted the existing Kubernetes resources by adding
+Argo CD tracking annotations. No application rollout was required.
+
+Important: GitHub Actions still uses direct `kubectl set image`
+deployment. The next milestone is to update the Kustomize image tag
+through GitHub Actions and let Argo CD reconcile the deployment.
+Automated sync, self-healing, and pruning are not enabled.
+
 ## 9. Repository Structure
 
 ```text
@@ -242,13 +280,16 @@ and are not part of the application repository.
 | Automated GitHub Actions EKS deployment | Completed and verified |
 | Kubernetes rolling update verification | Completed |
 | Application health check | Passed |
-| Argo CD GitOps integration | Planned |
+| Argo CD v3.6.2 installation | Completed |
+| Argo CD Application and Kustomize manifests | Completed |
+| Argo CD manual sync and resource adoption | Completed and verified |
+| GitHub Actions GitOps image update | Pending |
 | Monitoring and observability | Planned |
 | Final architecture documentation | In progress |
 
 ## 11. Next Implementation Steps
 
-1. Introduce Argo CD for GitOps-based deployment.
+1. Migrate GitHub Actions from direct kubectl image updates to GitOps manifest updates.
 2. Evaluate production-inspired Kubernetes resilience and security improvements.
 3. Add monitoring and observability.
 4. Improve deployment reporting and troubleshooting documentation.
@@ -276,7 +317,7 @@ https://github.com/P313-bit/aws-eks-github-actions-pilot
 ---
 
 Project status: GitHub Actions CI/CD pipeline and automated EKS deployment verified.
-Next milestone: Argo CD GitOps integration and monitoring.
+Next milestone: GitHub Actions GitOps image updates and Argo CD deployment validation.
 
 ## Self-Hosted GitHub Actions Runner
 
