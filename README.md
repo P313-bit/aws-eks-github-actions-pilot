@@ -448,3 +448,30 @@ Previous authorization checks using Kubernetes impersonation returned:
 | Read secrets | Denied |
 
 The legacy deployment role does not receive cluster-admin access or namespace-wide administrative permissions.
+
+## Argo CD Self-Healing Test
+
+**Status: Enabled and successfully verified**
+
+Argo CD automated self-healing is enabled for the `eks-pilot-api-dev` Application.
+
+Configuration in `argocd/application.yaml`:
+
+- `selfHeal: true`
+- `prune: false`
+
+### Test procedure
+
+1. Confirmed the Git desired replica count was 2.
+2. Temporarily scaled the live Kubernetes Deployment from 2 to 3 replicas:
+   `kubectl scale deployment eks-pilot-api -n dev --current-replicas=2 --replicas=3`
+3. Watched Deployment changes using `kubectl get deployment --watch`.
+4. Observed the desired replica count change from 2 to 3 and then return to 2.
+5. Verified the final Deployment state was 2/2 replicas.
+6. Verified the Argo CD Application was `Synced` and `Healthy`.
+
+### Result
+
+**Passed:** Argo CD detected the live replica-count drift and reconciled the Deployment back to the Git-defined state of 2 replicas.
+
+The test was performed as a temporary live-cluster change. The Git manifest remained unchanged, and resource pruning remains disabled.
