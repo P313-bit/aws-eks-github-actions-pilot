@@ -291,7 +291,10 @@ IAM policy files used for AWS configuration are maintained separately and are no
 | GitHub OIDC authentication | Completed |
 | EKS cluster provisioning | Completed |
 | Kubernetes Deployment and Service | Completed |
-| Application health endpoint testing | Previously verified |
+| Application health endpoint testing | Completed; HTTP 200 verified for /, /health, and /ready |
+| Kubernetes Service connectivity testing | Completed; ClusterIP Service and both EndpointSlice backends verified |
+| Kubernetes Deployment self-healing test | Completed; deleted Pod automatically replaced and 2/2 replicas restored |
+| Temporary test Pod cleanup | Completed |
 | Self-hosted GitHub Actions runner setup | Completed |
 | Dedicated EKS deployment IAM role and RBAC | Completed; legacy |
 | Argo CD v3.6.2 installation | Completed |
@@ -305,12 +308,12 @@ IAM policy files used for AWS configuration are maintained separately and are no
 
 ## 11. Next Implementation Steps
 
-1. Add application-level validation after each GitOps deployment.
+1. Test application container restart behavior and additional failure scenarios.
 2. Evaluate Argo CD automated sync and self-healing after reviewing the manual workflow.
 3. Add monitoring and observability.
 4. Improve Kubernetes security, resource management, and resilience.
 5. Review and remove legacy EKS deployment IAM permissions and RBAC when no longer required.
-6. Document architecture, troubleshooting, and cleanup procedures.
+6. Expand architecture, troubleshooting, and cleanup documentation.
 
 ## 12. Cost and Cleanup Considerations
 
