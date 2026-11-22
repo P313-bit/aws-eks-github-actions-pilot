@@ -303,7 +303,7 @@ IAM policy files used for AWS configuration are maintained separately and are no
 | GitHub Actions GitOps image update | Completed and verified |
 | Argo CD manual synchronization | Completed and verified |
 | Latest EKS rollout verification | Completed |
-| Automated Argo CD sync | Not enabled |
+| Automated Argo CD sync | Enabled and verified; Git commit automatically synchronized the Kubernetes Service annotation |
 | Monitoring and observability | Planned |
 | Further security and resilience improvements | Planned |
 
@@ -320,9 +320,24 @@ The API container restart behavior was tested by temporarily changing the Deploy
 
 This test verified Kubernetes container recovery through liveness probes. The temporary probe change was applied directly to the live Deployment and was not retained in Git.
 
+### Argo CD automated synchronization test
+
+Automated synchronization was enabled on the `eks-pilot-api-dev` Application with self-healing and pruning disabled.
+
+- Automated sync was configured in `argocd/application.yaml`.
+- `selfHeal: false` and `prune: false` were retained.
+- A test annotation, `learning-test: argocd-automated-sync`, was added to the Kubernetes Service manifest.
+- The change was committed and pushed to Git at commit `e247290`.
+- Argo CD detected the Git change and synchronized the Service automatically without a manual sync command.
+- The live Service annotation was verified successfully.
+- Argo CD reported the application as Synced and Healthy.
+- The Deployment remained available with 2/2 replicas, and both API Pods remained Running and Ready with zero restarts.
+
+This test verified automated Git-to-cluster synchronization for a metadata-only change. Self-healing and pruning were not enabled or tested.
+
 ## 11. Next Implementation Steps
 
-1. Evaluate Argo CD automated sync and self-healing after reviewing the manual workflow.
+1. Enable and test Argo CD self-healing separately; keep pruning disabled.
 2. Add monitoring and observability.
 3. Improve Kubernetes security, resource management, and resilience.
 4. Review and remove legacy EKS deployment IAM permissions and RBAC when no longer required.
