@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: eks-pilot-api
   namespace: dev
+  annotations:
+    learning-test: argocd-automated-sync
 spec:
   type: ClusterIP
   selector:
