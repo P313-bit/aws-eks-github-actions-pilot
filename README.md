@@ -294,6 +294,7 @@ IAM policy files used for AWS configuration are maintained separately and are no
 | Application health endpoint testing | Completed; HTTP 200 verified for /, /health, and /ready |
 | Kubernetes Service connectivity testing | Completed; ClusterIP Service and both EndpointSlice backends verified |
 | Kubernetes Deployment self-healing test | Completed; deleted Pod automatically replaced and 2/2 replicas restored |
+| Kubernetes container restart test | Completed; liveness probe failure triggered container restarts, probe restored, and 2/2 healthy replicas verified |
 | Temporary test Pod cleanup | Completed |
 | Self-hosted GitHub Actions runner setup | Completed |
 | Dedicated EKS deployment IAM role and RBAC | Completed; legacy |
@@ -306,14 +307,26 @@ IAM policy files used for AWS configuration are maintained separately and are no
 | Monitoring and observability | Planned |
 | Further security and resilience improvements | Planned |
 
+### Kubernetes container restart test
+
+The API container restart behavior was tested by temporarily changing the Deployment liveness probe endpoint from `/health` to `/health-test`.
+
+- The temporary endpoint returned an unsuccessful health check.
+- Kubernetes detected the liveness probe failures and restarted both API containers.
+- The liveness probe endpoint was restored to `/health`.
+- The Deployment rollout completed successfully after restoration.
+- Final verification confirmed two Running and Ready API Pods, with 2/2 replicas available and zero restarts on the replacement Pods.
+- Argo CD reported the application as Synced and Healthy after the original configuration was restored.
+
+This test verified Kubernetes container recovery through liveness probes. The temporary probe change was applied directly to the live Deployment and was not retained in Git.
+
 ## 11. Next Implementation Steps
 
-1. Test application container restart behavior and additional failure scenarios.
-2. Evaluate Argo CD automated sync and self-healing after reviewing the manual workflow.
-3. Add monitoring and observability.
-4. Improve Kubernetes security, resource management, and resilience.
-5. Review and remove legacy EKS deployment IAM permissions and RBAC when no longer required.
-6. Expand architecture, troubleshooting, and cleanup documentation.
+1. Evaluate Argo CD automated sync and self-healing after reviewing the manual workflow.
+2. Add monitoring and observability.
+3. Improve Kubernetes security, resource management, and resilience.
+4. Review and remove legacy EKS deployment IAM permissions and RBAC when no longer required.
+5. Expand architecture, troubleshooting, and cleanup documentation.
 
 ## 12. Cost and Cleanup Considerations
 
