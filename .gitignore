@@ -16,3 +16,7 @@ github-trust-policy.json
 # Local EKS deployment IAM policy documents
 github-eks-deploy-policy.json
 github-eks-trust-policy.json
+
+# Local monitoring backup files
+monitoring/values-learning.yaml.bak
+monitoring/chart-default-values.yaml

@@ -475,3 +475,67 @@ Configuration in `argocd/application.yaml`:
 **Passed:** Argo CD detected the live replica-count drift and reconciled the Deployment back to the Git-defined state of 2 replicas.
 
 The test was performed as a temporary live-cluster change. The Git manifest remained unchanged, and resource pruning remains disabled.
+
+---
+
+# AWS EKS Monitoring & Alerting
+
+## Overview
+
+Implemented Kubernetes monitoring and email alerting using the Prometheus monitoring stack.
+
+## Components
+
+- **Prometheus:** Metrics collection and alert evaluation.
+- **Grafana:** Monitoring dashboards and visualization.
+- **Alertmanager:** Alert grouping and email notifications.
+- **Node Exporter:** Node-level metrics.
+- **Kube State Metrics:** Kubernetes resource metrics.
+- **Gmail SMTP:** Email notifications.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A[AWS EKS Cluster] --> B[Node Exporter]
+    A --> C[Kube State Metrics]
+    B --> D[Prometheus]
+    C --> D
+    D --> E[Prometheus Alert Rules]
+    E --> F[Alertmanager]
+    F --> G[Gmail SMTP]
+    D --> H[Grafana Dashboards]
+```
+
+## Alert Rule
+
+Created `HighNodeMemoryUsage` in `monitoring/alerts/node-memory.yaml`.
+
+- Condition: Node memory utilization above 80%.
+- Duration: 5 minutes.
+- Severity: Warning.
+
+## Email Notifications
+
+Configured Alertmanager with Gmail SMTP using a Kubernetes Secret named `alertmanager-email-config`.
+
+- SMTP server: `smtp.gmail.com:587`
+- Encryption: STARTTLS
+- Authentication: Gmail App Password
+- Secret credentials are not stored in Git.
+
+## Verification
+
+- Prometheus and Alertmanager running.
+- Grafana dashboards accessible.
+- Prometheus alert rule loaded.
+- Alertmanager configuration successfully reloaded.
+- Watchdog notification email received.
+- Custom test alert email received.
+- Temporary test rule removed after verification.
+
+## Security
+
+- Never commit SMTP passwords or Kubernetes Secret values.
+- Kubernetes Secret data is base64-encoded; base64 is not encryption.
+- Use a suitable secret-management solution for production.
