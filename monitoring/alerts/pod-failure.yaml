@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubernetes-pod-failure-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: kubernetes-pod-failure.rules
+      interval: 30s
+      rules:
+        - alert: KubernetesPodFailure
+          expr: |
+            kube_pod_status_phase{
+              namespace="dev",
+              phase=~"Pending|Failed|Unknown"
+            } == 1
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kubernetes pod is in an unhealthy phase"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been in {{ $labels.phase }} phase for more than 2 minutes."

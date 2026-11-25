@@ -304,7 +304,7 @@ IAM policy files used for AWS configuration are maintained separately and are no
 | Argo CD manual synchronization | Completed and verified |
 | Latest EKS rollout verification | Completed |
 | Automated Argo CD sync | Enabled and verified; Git commit automatically synchronized the Kubernetes Service annotation |
-| Monitoring and observability | Planned |
+| Monitoring and observability | Completed and verified |
 | Further security and resilience improvements | Planned |
 
 ### Kubernetes container restart test
@@ -338,7 +338,7 @@ This test verified automated Git-to-cluster synchronization for a metadata-only 
 ## 11. Next Implementation Steps
 
 1. Enable and test Argo CD self-healing separately; keep pruning disabled.
-2. Add monitoring and observability.
+2. Expand monitoring with additional application and infrastructure alerts.
 3. Improve Kubernetes security, resource management, and resilience.
 4. Review and remove legacy EKS deployment IAM permissions and RBAC when no longer required.
 5. Expand architecture, troubleshooting, and cleanup documentation.
@@ -507,12 +507,24 @@ flowchart TD
     D --> H[Grafana Dashboards]
 ```
 
-## Alert Rule
+## Alert Rules
 
-Created `HighNodeMemoryUsage` in `monitoring/alerts/node-memory.yaml`.
+### HighNodeMemoryUsage
+
+File: `monitoring/alerts/node-memory.yaml`
+
+
 
 - Condition: Node memory utilization above 80%.
 - Duration: 5 minutes.
+- Severity: Warning.
+
+### KubernetesPodFailure
+
+File: `monitoring/alerts/pod-failure.yaml`
+
+- Condition: Pods in the `dev` namespace enter Pending, Failed, or Unknown phase.
+- Duration: 2 minutes.
 - Severity: Warning.
 
 ## Email Notifications
@@ -533,6 +545,9 @@ Configured Alertmanager with Gmail SMTP using a Kubernetes Secret named `alertma
 - Watchdog notification email received.
 - Custom test alert email received.
 - Temporary test rule removed after verification.
+- Gmail SMTP authentication verified using a temporary firing alert.
+- Email notification failures: zero during the five-minute test window.
+- Previous Alertmanager notification failure alerts cleared.
 
 ## Security
 
