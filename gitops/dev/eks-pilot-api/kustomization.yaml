@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - api-deployment.yaml
   - api-service.yaml
+  - api-pdb.yaml
 
 images:
   - name: 750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api
