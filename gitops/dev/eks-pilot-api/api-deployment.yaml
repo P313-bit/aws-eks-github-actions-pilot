@@ -15,6 +15,8 @@ spec:
       labels:
         app: eks-pilot-api
     spec:
+      serviceAccountName: eks-pilot-api
+      automountServiceAccountToken: false
       containers:
         - name: api
           image: 750281913869.dkr.ecr.ap-south-1.amazonaws.com/eks-pilot-api:20516bb5e0a37cfa502ad775163be8f0447953d6-3
